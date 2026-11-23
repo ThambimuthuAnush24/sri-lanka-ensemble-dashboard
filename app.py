@@ -27,21 +27,49 @@ REQUIRED = {"year", "week", "week_start", "district", "cases"}
 SEED = 42
 
 st.set_page_config(page_title="Lanka Ensemble Lab", page_icon="🇱🇰", layout="wide", initial_sidebar_state="expanded")
+
+# Use live Streamlit CSS variables so appearance changes do not need a rerun.
 st.markdown("""
 <style>
-.stApp {background: #090f1e; color:#e6edf8;}
-.block-container {padding-top: 1.65rem; padding-bottom: 3rem; max-width: 1400px;}
-[data-testid="stSidebar"] {background:#0c1628;}
-[data-testid="stMetric"] {background:#111d32; padding:15px 17px; border-radius:14px; border:1px solid #263750;}
-[data-testid="stMetricLabel"] {color:#a9b8d1;}
-[data-testid="stMetricValue"] {color:#f4f7ff;}
-section[data-testid="stSidebar"] hr {border-color:#263750;}
+.block-container {padding-top: 4rem; padding-bottom: 3rem; max-width: 1400px;}
 h1,h2,h3 {letter-spacing:-.02em;}
-.hero {background:linear-gradient(105deg,#172d4b 0%,#10213b 58%,#102f37 100%);border:1px solid #294665;border-radius:18px;padding:24px 29px;margin-bottom:20px;}
-.eyebrow {font-size:12px;letter-spacing:.16em;color:#81dfd5;font-weight:750;margin-bottom:8px;}
-.hero h1 {margin:0;color:#fff;font-size:2.2rem;}
-.hero p {margin:10px 0 0;color:#bdd0e4;}
-.smallnote {color:#92a7c1;font-size:13px;}
+[data-testid="stMetric"] {
+    background: var(--secondary-background-color) !important;
+    padding: 15px 17px;
+    border-radius: 14px;
+    border: 1px solid var(--border-color, var(--text-color));
+    min-height: 112px;
+    overflow-wrap: anywhere;
+}
+[data-testid="stMetricLabel"], [data-testid="stMetricValue"],
+[data-testid="stMetricDelta"] {color: var(--text-color) !important; opacity:1 !important;}
+[data-testid="stMetricLabel"] p {color: var(--text-color) !important; opacity:1 !important;}
+section[data-testid="stSidebar"] hr {border-color:var(--border-color, var(--text-color));}
+/* Keep the existing hero colors readable in either appearance. */
+.hero {
+    background: linear-gradient(105deg,#172d4b 0%,#10213b 58%,#102f37 100%) !important;
+    border: 1px solid #294665;
+    border-radius:18px;
+    padding: 24px 29px;
+    margin-bottom:20px;
+}
+.hero h1 {margin:0; color:#fff !important; font-size:clamp(1.5rem,3vw,2.2rem); line-height:1.25;}
+.hero p {margin:10px 0 0;color:#d4e4f6 !important;opacity:1 !important;}
+.hero p b {color:#fff !important;}
+.hero .eyebrow {font-size:12px;letter-spacing:.16em;color:#81dfd5 !important;font-weight:750;margin-bottom:8px;}
+.smallnote {color:var(--text-color);font-size:13px;}
+/* Allow long metric values and navigation labels to remain accessible. */
+[data-testid="stMetricLabel"] {height:auto; min-height:1.5rem;}
+[data-testid="stMetricLabel"] p,
+[data-testid="stMetricValue"], [data-testid="stMetricValue"] > div {
+    white-space:normal;
+    overflow:visible;
+    text-overflow:clip;
+    overflow-wrap:anywhere;
+}
+[data-testid="stTabs"] [role="tablist"] {overflow-x:auto;}
+[data-testid="stTabs"] [role="tab"] {white-space:nowrap; flex-shrink:0;}
+@media(max-width:700px){.hero{padding:18px}.hero h1{font-size:1.6rem}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -194,7 +222,23 @@ def upcoming_features(history: pd.DataFrame) -> pd.DataFrame:
 
 
 def plot_theme(fig):
-    fig.update_layout(template="plotly_dark", paper_bgcolor="#101a2d", plot_bgcolor="#101a2d",font=dict(color="#dbe6f5"),margin=dict(l=12,r=12,t=45,b=12),legend=dict(orientation="h",y=-0.22))
+    """Let Streamlit apply the live chart theme, including text and tooltips."""
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(size=13),
+        margin=dict(l=26, r=20, t=42, b=46),
+        legend=dict(orientation="h", y=-0.24, font=dict(size=12)),
+        uniformtext=dict(minsize=10, mode="show"),
+    )
+    # Inside labels sit on the existing pastel bars; outside labels follow
+    # the chart theme. Do not force both to the same SVG text color.
+    fig.update_traces(
+        insidetextfont=dict(color="#14243c"), cliponaxis=False,
+        selector=dict(type="bar"),
+    )
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
     return fig
 
 
@@ -256,18 +300,18 @@ st.caption(f"Source: {input_name}  ·  {hist['week_start'].nunique():,} reportin
 
 tabs=st.tabs(["📊 Overview","🏆 Model comparison","📈 District explorer","🔮 Next-week forecast","🧠 Explain models","🗃️ Data & methodology"])
 with tabs[0]:
-    left,right=st.columns([1.5,1])
+    left,right=st.columns([1.5,1], gap="large")
     with left:
         st.subheader("Reported dengue cases by week")
         weekly=hist.groupby("week_start",as_index=False)["cases"].sum()
         fig=px.area(weekly,x="week_start",y="cases",labels={"week_start":"Reporting week","cases":"Weekly cases"},color_discrete_sequence=["#5dd7ca"])
         fig.update_traces(line_width=2,fillcolor="rgba(93,215,202,.17)")
-        st.plotly_chart(plot_theme(fig),use_container_width=True)
+        st.plotly_chart(plot_theme(fig), use_container_width=True, theme="streamlit")
     with right:
         st.subheader("Top reporting areas")
         ranking=hist.groupby("district",as_index=False)["cases"].sum().sort_values("cases",ascending=False).head(10)
         fig=px.bar(ranking.sort_values("cases"),x="cases",y="district",orientation="h",color_discrete_sequence=["#75a8ff"],labels={"cases":"Reported cases","district":""})
-        st.plotly_chart(plot_theme(fig),use_container_width=True)
+        st.plotly_chart(plot_theme(fig), use_container_width=True, theme="streamlit")
     st.subheader("How the ensemble pipeline works")
     a,b,c=st.columns(3)
     a.info("**01 · Bagging**\n\nRandom Forest and Extra Trees train multiple randomized decision trees and average predictions.")
@@ -282,7 +326,7 @@ with tabs[1]:
         metric=st.selectbox("Comparison metric",["MAE","RMSE","R²"],index=0)
         ascending = metric != "R²"
         fig=px.bar(board.sort_values(metric,ascending=not ascending),x=metric,y="Model",orientation="h",color="Group",color_discrete_map={"Bagging":"#69b0fc","Boosting":"#ffba72","Hybrid":"#6bdbbf"},text_auto=".2f")
-        st.plotly_chart(plot_theme(fig),use_container_width=True)
+        st.plotly_chart(plot_theme(fig), use_container_width=True, theme="streamlit")
     with col_b:
         chosen=st.selectbox("Inspect a model",list(board["Model"]),index=0)
         dfpred=test[["week_start","district","cases"]].copy()
@@ -292,7 +336,7 @@ with tabs[1]:
             dfpred=dfpred[dfpred["district"]==district_pick]
         daily=dfpred.groupby("week_start",as_index=False)[["cases","Predicted cases"]].sum().rename(columns={"cases":"Actual cases"})
         fig=px.line(daily,x="week_start",y=["Actual cases","Predicted cases"],markers=True,color_discrete_sequence=["#5bd9c7","#fdb570"],labels={"week_start":"Week","value":"Cases","variable":"Series"})
-        st.plotly_chart(plot_theme(fig),use_container_width=True)
+        st.plotly_chart(plot_theme(fig), use_container_width=True, theme="streamlit")
     st.caption("MAE and RMSE are in reported dengue cases per district-week (lower is better). R² is higher-is-better; negative R² is possible. Model selection uses test MAE for this educational comparison, not an independent production validation set.")
 
 with tabs[2]:
@@ -304,7 +348,7 @@ with tabs[2]:
     c2.metric("Total observed",f"{int(series['cases'].sum()):,} cases")
     c3.metric("Average / week",f"{series['cases'].mean():.1f}")
     fig=px.line(series,x="week_start",y="cases",markers=True,color_discrete_sequence=["#6bd8ca"],labels={"week_start":"Week","cases":"Reported cases"})
-    st.plotly_chart(plot_theme(fig),use_container_width=True)
+    st.plotly_chart(plot_theme(fig), use_container_width=True, theme="streamlit")
     st.caption("Kalmunai is tracked separately from Ampara; there are 26 reporting areas, not 26 administrative districts.")
 
 with tabs[3]:
@@ -341,7 +385,7 @@ with tabs[3]:
         selected_districts=st.multiselect("Show districts",all_districts,default=all_districts[:8])
         selected=forecast[forecast["district"].isin(selected_districts)].sort_values("Predicted cases",ascending=False)
         fig=px.bar(selected,x="district",y=["Last reported week","Predicted cases"],barmode="group",color_discrete_sequence=["#77a9ff","#60d6ba"],labels={"value":"Cases","variable":"Measure","district":""})
-        st.plotly_chart(plot_theme(fig),use_container_width=True)
+        st.plotly_chart(plot_theme(fig), use_container_width=True, theme="streamlit")
         st.dataframe(forecast.sort_values("Predicted cases",ascending=False),hide_index=True,use_container_width=True)
         st.download_button("Download forecast CSV",forecast.to_csv(index=False),file_name="sri_lanka_dengue_forecast.csv",mime="text/csv")
 
@@ -351,7 +395,7 @@ with tabs[4]:
     feature_labels=pd.Series(rf.feature_importances_,index=out["cols"]).sort_values(ascending=False).head(16)
     fi=pd.DataFrame({"Feature":feature_labels.index,"Importance":feature_labels.values})
     fig=px.bar(fi.sort_values("Importance"),x="Importance",y="Feature",orientation="h",color_discrete_sequence=["#77cabb"])
-    st.plotly_chart(plot_theme(fig),use_container_width=True)
+    st.plotly_chart(plot_theme(fig), use_container_width=True, theme="streamlit")
     st.caption("Impurity-based importances are indicative, not causal explanations. Correlated lag features can share importance.")
     st.markdown("""#### Understand the ensemble methods
 **Bagging:** Trains many trees on randomized data/features; averaging reduces variance. Random Forest and Extra Trees both provide tree ensembles (Extra Trees uses more randomized splits).  
